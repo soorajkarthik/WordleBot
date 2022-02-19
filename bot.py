@@ -28,7 +28,6 @@ def get_usable_words():
     """
     with open(POSSIBLE_WORD_LIST_FILE) as file:
         return [line.strip() for line in file.readlines()]
-    return []
 
 
 def save_pattern_matrix():
@@ -89,7 +88,7 @@ def get_pattern_matrix(words1, words2):
     global PATTERN_MATRIX
     global WORD_INDEX_MAP
 
-    if not PATTERN_MATRIX or not WORD_INDEX_MAP:
+    if PATTERN_MATRIX is None or WORD_INDEX_MAP is None:
         if not os.path.exists(PATTERN_MATRIX_FILE):
             save_pattern_matrix()
 
@@ -104,7 +103,56 @@ def get_pattern_matrix(words1, words2):
     return PATTERN_MATRIX[matrix_rows_cols]
         
 
+def calculate_expected_entropy(patterns):
+    """
+    Calculates the expected information of the guess given
+    the list of patterns that the guess could potentially
+    result in.
+    """
+
+    total_patterns = len(patterns)
+    _, counts = np.unique(patterns, return_counts=True)
+    probabilities = counts / total_patterns
+    
+    expected_entropy = np.sum(np.multiply(probabilities, -1*np.log2(probabilities)))
+
+    return expected_entropy
+
+
+def make_guess(words):
+    """
+    Makes a guess just based on the simple heuristic of 
+    maximizing the entropy of our guess.
+    """
+    
+    pattern_matrix = get_pattern_matrix(words, words)
+    expected_entropies = np.apply_along_axis(calculate_expected_entropy, 1, pattern_matrix)
+    guess = words[np.argmax(expected_entropies)]
+
+    return guess
+
+
+def trim_word_list(words, guess, guess_pattern):
+    """
+    Trim the list of possible words based on our guess
+    and the pattern that we got from our guess.
+    """
+    
+    all_word_patterns = get_pattern_matrix([guess], words).flatten()
+    pattern_match_indices = np.where(all_word_patterns == guess_pattern)
+    trimmed_words = words[pattern_match_indices]
+
+    return trimmed_words 
+
+def play_game():
+    words = np.array(get_usable_words())
+    
+    while(len(words) > 0):
+        guess = make_guess(words)
+        print(guess)
+        pattern_str = input("What was the pattern: ")[::-1]
+        pattern = int(pattern_str, 3)
+        words = trim_word_list(words, guess, pattern)
+
 if __name__ == "__main__":
-    save_pattern_matrix()
-    matrix = get_pattern_matrix(["guess"], ["guile"])
-    print(matrix)
+    play_game()
