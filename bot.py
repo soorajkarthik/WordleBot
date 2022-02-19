@@ -1,158 +1,135 @@
-import itertools
+import argparse
 import os
+import time
 
+import keyboard
 import numpy as np
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 
+from processing import get_usable_words, make_guess, trim_word_list
 
-DATA_DIRECTORY = os.path.join(
+DRIVER_DIRECTORY = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
-    "data"
+    "drivers"
 )
 
-POSSIBLE_WORD_LIST_FILE = os.path.join(DATA_DIRECTORY, "possible_words.txt")
-PATTERN_MATRIX_FILE = os.path.join(DATA_DIRECTORY, "pattern_matrix.npy")
+CHROME_DRIVER_FILE = os.path.join(DRIVER_DIRECTORY, "chromedriver.exe")
 
-EXACT_MATCH = np.uint8(2)
-ALMOST_MATCH = np.uint8(1)
-NO_MATCH = np.uint8(0)
-
-PATTERN_MATRIX = None
-WORD_INDEX_MAP = None
+WORDLE_URL = "https://www.powerlanguage.co.uk/wordle/"
+WORDMASTER_URL = "https://octokatherine.github.io/word-master/"
 
 
-def get_usable_words(): 
+def start_game_manual(is_classic_wordle=False):   
     """
-    Gets all of the possible answers for our Wordle bot
-
-    returns: a list of str with the possible words
+    Start manual entering of wordle pattern results.
     """
-    with open(POSSIBLE_WORD_LIST_FILE) as file:
-        return [line.strip() for line in file.readlines()]
+    usable_words = get_usable_words(is_classic_wordle=is_classic_wordle)
+    while(True):
+        words = np.copy(usable_words)
+        while(True):
+            guess = make_guess(words, is_classic_wordle=is_classic_wordle)
+            print(guess)
+            pattern_str = input("What was the pattern: ")[::-1]
+            pattern = int(pattern_str, 3)
+            
+            if pattern == 3**5 - 1:
+                break
+
+            words = trim_word_list(words, guess, pattern, is_classic_wordle=is_classic_wordle)
 
 
-def save_pattern_matrix():
+def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
     """
-    Saves creates a numpy file of a matrix where matrix[a, b] gives
-    us the pattern if "a" was the guess and "b" was the answer. It
-    represents this value as an integer. If we write this number in
-    ternary, it is the pattern where 2 is a green match, 1 is a yellow, 
-    and 0 is grey.
-    """
-
-    words = np.array([[ord(char) for char in word] for word in get_usable_words()])
-
-    word_len = len(words[0])
-    num_words = len(words)
-
-    # per_letter_equality[a, b, i, j] = True if words[a][i] = words[b][j]
-    per_letter_equality = np.zeros((num_words, num_words, word_len, word_len), dtype=bool)
-
-    # pattern_matrix[a, b, i] = 0 | 1 | 2 (based on grey, yellow, green)
-    pattern_matrix = np.zeros((num_words, num_words, word_len), dtype=np.uint8)
-
-    for i1, i2 in itertools.product(range(word_len), range(word_len)):
-        per_letter_equality[:, :, i1, i2] = np.equal.outer(words[:, i1], words[:, i2])
-
-    for i in range(word_len):
-        exact_matches = per_letter_equality[:, :, i, i].flatten()
-        pattern_matrix[:, :, i].flat[exact_matches] = EXACT_MATCH
-        
-        for k in range(word_len):
-            per_letter_equality[:, :, i, k].flat[exact_matches] = False
-            per_letter_equality[:, :, k, i].flat[exact_matches] = False
-
-    
-    for i, j in itertools.product(range(word_len), range(word_len)):
-        matches_ij = per_letter_equality[:, :, i, j].flatten()
-        pattern_matrix[:, :, i].flat[matches_ij] = ALMOST_MATCH
-
-        for k in range(word_len):
-            per_letter_equality[:, :, i, k].flat[matches_ij] = False
-            per_letter_equality[:, :, k, j].flat[matches_ij] = False
-
-    # Dot product, gives us int representation of pattern, if we look at pattern in ternary
-    pattern_matrix = np.dot(pattern_matrix, 3**np.arange(word_len, dtype=np.uint8))    
-
-    np.save(PATTERN_MATRIX_FILE, pattern_matrix)
-
-
-def get_pattern_matrix(words1, words2):
-    """
-    Returns a len(words1) x len(words2) matrix where matrix[a, b]
-    gives us the pattern if "a" was a guess and "b" was the answer.
-    It we get the value for every pair of words between words1 and
-    words2. 
-
+    Plays wordle automatically using keyboard library. Make sure
+    you are focused on the window opened up by selenium.
     """
 
-    global PATTERN_MATRIX
-    global WORD_INDEX_MAP
+    for guess_num in range(6):
+        guess = make_guess(words, is_classic_wordle=is_classic_wordle)
+        keyboard.write(guess, delay=0.05)
+        keyboard.press_and_release('enter')
 
-    if PATTERN_MATRIX is None or WORD_INDEX_MAP is None:
-        if not os.path.exists(PATTERN_MATRIX_FILE):
-            save_pattern_matrix()
+        pattern_str = []
 
-        PATTERN_MATRIX = np.load(PATTERN_MATRIX_FILE)
-        WORD_INDEX_MAP = {word: index for (index, word) in enumerate(get_usable_words())}
+        # TODO fix this
+        if is_classic_wordle:
+            row = driver.execute_script('return arguments[0].shadowRoot', game_rows[guess_num])
+            tiles = row.find_elements(By.CLASS_NAME, "game-tile")
+            evaluation_map = {
+                "correct": "2",
+                "present": "1",
+                "absent": "0"
+            }
+            
+            for tile in tiles:
+                print(tile)
+                pattern_str.append(evaluation_map[tile.get_attribute("evaluation")])
+        else:
+            for tile in game_rows[guess_num]:
+                if 'nm-inset-n-green' in tile.get_attribute("class"):
+                    pattern_str.append("2")
+                elif 'nm-inset-yellow-500' in tile.get_attribute("class"):
+                    pattern_str.append("1")
+                elif 'nm-inset-n-gray' in tile.get_attribute("class"):
+                    pattern_str.append("0")
 
-    word1_indices = [WORD_INDEX_MAP[word] for word in words1] # Rows from pattern matrix
-    word2_indices = [WORD_INDEX_MAP[word] for word in words2] # Colums from pattern matrix
+        pattern = int("".join(pattern_str[::-1]), 3)
 
-    matrix_rows_cols = np.ix_(word1_indices, word2_indices)
+        if pattern == 3**5 - 1:
+            return [guess]
 
-    return PATTERN_MATRIX[matrix_rows_cols]
-        
+        words = trim_word_list(words, guess, pattern, is_classic_wordle=is_classic_wordle)
 
-def calculate_expected_entropy(patterns):
+    return words        
+
+def start_game_automated(is_classic_wordle=False, num_rounds=100):
     """
-    Calculates the expected information of the guess given
-    the list of patterns that the guess could potentially
-    result in.
+    Opens browser with website based on classic or not. Then 
+    starts playing wordle automatically.
     """
 
-    total_patterns = len(patterns)
-    _, counts = np.unique(patterns, return_counts=True)
-    probabilities = counts / total_patterns
-    
-    expected_entropy = np.sum(np.multiply(probabilities, -1*np.log2(probabilities)))
+    driver = webdriver.Chrome(service=Service(CHROME_DRIVER_FILE))    
+    words = get_usable_words(is_classic_wordle=is_classic_wordle)
+    start_button = 'esc'
 
-    return expected_entropy
+    if is_classic_wordle:
+        driver.get(WORDLE_URL)
+        keyboard.wait(start_button)
+           
+        game_app = driver.find_element(By.TAG_NAME, 'game-app')
+        board = driver.execute_script("return arguments[0].shadowRoot.getElementById('board')", game_app)
+        game_rows = board.find_elements(By.TAG_NAME, 'game-row')
 
+        play_game_automated(np.copy(words), game_rows, driver=driver, is_classic_wordle=is_classic_wordle)
+    else:
+        driver.get(WORDMASTER_URL)
+        keyboard.wait(start_button)
 
-def make_guess(words):
-    """
-    Makes a guess just based on the simple heuristic of 
-    maximizing the entropy of our guess.
-    """
-    
-    pattern_matrix = get_pattern_matrix(words, words)
-    expected_entropies = np.apply_along_axis(calculate_expected_entropy, 1, pattern_matrix)
-    guess = words[np.argmax(expected_entropies)]
+        for _ in range(num_rounds):
+            game_rows = np.array(driver.find_elements(By.TAG_NAME, 'span')).reshape(6, 5)
 
-    return guess
-
-
-def trim_word_list(words, guess, guess_pattern):
-    """
-    Trim the list of possible words based on our guess
-    and the pattern that we got from our guess.
-    """
-    
-    all_word_patterns = get_pattern_matrix([guess], words).flatten()
-    pattern_match_indices = np.where(all_word_patterns == guess_pattern)
-    trimmed_words = words[pattern_match_indices]
-
-    return trimmed_words 
-
-def play_game():
-    words = np.array(get_usable_words())
-    
-    while(len(words) > 0):
-        guess = make_guess(words)
-        print(guess)
-        pattern_str = input("What was the pattern: ")[::-1]
-        pattern = int(pattern_str, 3)
-        words = trim_word_list(words, guess, pattern)
+            play_game_automated(np.copy(words), game_rows, is_classic_wordle=is_classic_wordle)
+            
+            time.sleep(2)
+            keyboard.press_and_release('esc')
+            driver.find_element(By.XPATH, '//button[text()="Play Again"]').click()
+            time.sleep(1)
 
 if __name__ == "__main__":
-    play_game()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', default=False)
+    parser.add_argument('-c', default=False)
+    parser.add_argument('-r', default=100)
+    args = parser.parse_args()
+
+    manual = bool(args.m)
+    classic = bool(args.c)
+    rounds = int(args.r)
+
+    if manual:
+        start_game_manual(is_classic_wordle=classic)
+    else:
+        start_game_automated(is_classic_wordle=classic, num_rounds=rounds)
