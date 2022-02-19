@@ -1,0 +1,6 @@
+name: wordle_bot
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - scipy
