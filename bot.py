@@ -5,6 +5,7 @@ import time
 import keyboard
 import numpy as np
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
@@ -53,10 +54,11 @@ def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
 
         pattern_str = []
 
-        # TODO fix this
         if is_classic_wordle:
+            time.sleep(2) # need to sleep to wait for animation to finish
+            
             row = driver.execute_script('return arguments[0].shadowRoot', game_rows[guess_num])
-            tiles = row.find_elements(By.CLASS_NAME, "game-tile")
+            tiles = row.find_elements(By.CSS_SELECTOR, "game-tile")
             evaluation_map = {
                 "correct": "2",
                 "present": "1",
@@ -64,8 +66,7 @@ def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
             }
             
             for tile in tiles:
-                print(tile)
-                pattern_str.append(evaluation_map[tile.get_attribute("evaluation")])
+                pattern_str.append(evaluation_map[str(tile.get_attribute("evaluation"))])
         else:
             for tile in game_rows[guess_num]:
                 if 'nm-inset-n-green' in tile.get_attribute("class"):
@@ -90,7 +91,10 @@ def start_game_automated(is_classic_wordle=False, num_rounds=100):
     starts playing wordle automatically.
     """
 
-    driver = webdriver.Chrome(service=Service(CHROME_DRIVER_FILE))    
+    chrome_options = Options()
+    chrome_options.add_experimental_option("detach", True)
+    driver = webdriver.Chrome(service=Service(CHROME_DRIVER_FILE), options=chrome_options)    
+
     words = get_usable_words(is_classic_wordle=is_classic_wordle)
     start_button = 'esc'
 
