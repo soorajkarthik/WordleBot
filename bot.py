@@ -56,7 +56,7 @@ def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
 
         if is_classic_wordle:
             time.sleep(2) # need to sleep to wait for animation to finish
-            
+
             row = driver.execute_script('return arguments[0].shadowRoot', game_rows[guess_num])
             tiles = row.find_elements(By.CSS_SELECTOR, "game-tile")
             evaluation_map = {
@@ -124,14 +124,14 @@ def start_game_automated(is_classic_wordle=False, num_rounds=100):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', default=False)
-    parser.add_argument('-c', default=False)
-    parser.add_argument('-r', default=100)
+    parser.add_argument('-m', type=bool, default=False, help="Run in manual mode. Default is automatic.")
+    parser.add_argument('-c', type=bool, default=False, help="Play wordle classic. Default is WordMaster.")
+    parser.add_argument('-r', type=int, default=100, help="Number of rounds to play, if not classic mode. Default is 100.")
     args = parser.parse_args()
 
-    manual = bool(args.m)
-    classic = bool(args.c)
-    rounds = int(args.r)
+    manual = args.m
+    classic = args.c
+    rounds = args.r
 
     if manual:
         start_game_manual(is_classic_wordle=classic)
