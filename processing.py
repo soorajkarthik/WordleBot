@@ -7,12 +7,12 @@ import numpy as np
 
 DATA_DIRECTORY = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
-    "data"
+    'data'
 )
 
-POSSIBLE_WORDS_WORDLE_FILE = os.path.join(DATA_DIRECTORY, "possible_words_wordle.txt")
-POSSIBLE_WORDS_WORDMASTER_FILE = os.path.join(DATA_DIRECTORY, "possible_words_wordmaster.txt")
-PATTERN_MATRIX_FILE = os.path.join(DATA_DIRECTORY, "pattern_matrix.npy")
+POSSIBLE_WORDS_WORDLE_FILE = os.path.join(DATA_DIRECTORY, 'possible_words_wordle.txt')
+POSSIBLE_WORDS_WORDMASTER_FILE = os.path.join(DATA_DIRECTORY, 'possible_words_wordmaster.txt')
+PATTERN_MATRIX_FILE = os.path.join(DATA_DIRECTORY, 'pattern_matrix.npy')
 
 EXACT_MATCH = np.uint8(2)
 ALMOST_MATCH = np.uint8(1)
@@ -37,7 +37,7 @@ def get_usable_words(is_classic_wordle=False):
 def save_pattern_matrix(words):
     """
     Saves creates a numpy file of a matrix where matrix[a, b] gives
-    us the pattern if "a" was the guess and "b" was the answer. It
+    us the pattern if 'a' was the guess and 'b' was the answer. It
     represents this value as an integer. If we write this number in
     ternary, it is the pattern where 2 is a green match, 1 is a yellow, 
     and 0 is grey.
@@ -82,7 +82,7 @@ def save_pattern_matrix(words):
 def get_pattern_matrix(words1, words2, is_classic_wordle):
     """
     Returns a len(words1) x len(words2) matrix where matrix[a, b]
-    gives us the pattern if "a" was a guess and "b" was the answer.
+    gives us the pattern if 'a' was a guess and 'b' was the answer.
     It we get the value for every pair of words between words1 and
     words2. 
 
@@ -127,15 +127,26 @@ def calculate_expected_entropy(patterns):
     return expected_entropy
 
 
-def make_guess(words, is_classic_wordle=False):
+def make_guess(words, is_classic_wordle=False, method='max_entropy'):
     """
     Makes a guess just based on the simple heuristic of 
-    maximizing the entropy of our guess.
+    maximizing the entropy of our guess. Retunns a tuple
+    with (guess, guess_index)
     """
+
+    if len(words) <= 0:
+        raise RuntimeError("Couldn't make a guess since the word list was empty!")
+        
+    guess = words[0]
     
-    pattern_matrix = get_pattern_matrix(words, words, is_classic_wordle=is_classic_wordle)
-    expected_entropies = np.apply_along_axis(calculate_expected_entropy, 1, pattern_matrix)
-    guess = words[np.argmax(expected_entropies)]
+    if method == 'max_entropy':
+        pattern_matrix = get_pattern_matrix(words, words, is_classic_wordle=is_classic_wordle)
+        expected_entropies = np.apply_along_axis(calculate_expected_entropy, 1, pattern_matrix)
+        guess = words[np.argmax(expected_entropies)]
+    
+    elif method == 'max_two_step_entropy':
+        # TODO implement this
+        guess = 'guess'
 
     return guess
 

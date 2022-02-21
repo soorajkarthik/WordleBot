@@ -13,16 +13,16 @@ from processing import get_usable_words, make_guess, trim_word_list
 
 DRIVER_DIRECTORY = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
-    "drivers"
+    'drivers'
 )
 
-CHROME_DRIVER_FILE = os.path.join(DRIVER_DIRECTORY, "chromedriver.exe")
+CHROME_DRIVER_FILE = os.path.join(DRIVER_DIRECTORY, 'chromedriver.exe')
 
-WORDLE_URL = "https://www.powerlanguage.co.uk/wordle/"
-WORDMASTER_URL = "https://octokatherine.github.io/word-master/"
+WORDLE_URL = 'https://www.powerlanguage.co.uk/wordle/'
+WORDMASTER_URL = 'https://octokatherine.github.io/word-master/'
 
 
-def start_game_manual(is_classic_wordle=False):   
+def start_game_manual(is_classic_wordle=False, method='max_entropy'):   
     """
     Start manual entering of wordle pattern results.
     """
@@ -30,9 +30,9 @@ def start_game_manual(is_classic_wordle=False):
     while(True):
         words = np.copy(usable_words)
         while(True):
-            guess = make_guess(words, is_classic_wordle=is_classic_wordle)
+            guess = make_guess(words, is_classic_wordle=is_classic_wordle, method=method)
             print(guess)
-            pattern_str = input("What was the pattern: ")[::-1]
+            pattern_str = input('What was the pattern: ')[::-1]
             pattern = int(pattern_str, 3)
             
             if pattern == 3**5 - 1:
@@ -41,14 +41,14 @@ def start_game_manual(is_classic_wordle=False):
             words = trim_word_list(words, guess, pattern, is_classic_wordle=is_classic_wordle)
 
 
-def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
+def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False, method='max_entropy'):
     """
     Plays wordle automatically using keyboard library. Make sure
     you are focused on the window opened up by selenium.
     """
 
     for guess_num in range(6):
-        guess = make_guess(words, is_classic_wordle=is_classic_wordle)
+        guess = make_guess(words, is_classic_wordle=is_classic_wordle, method=method)
         keyboard.write(guess, delay=0.05)
         keyboard.press_and_release('enter')
 
@@ -58,25 +58,25 @@ def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
             time.sleep(2) # need to sleep to wait for animation to finish
 
             row = driver.execute_script('return arguments[0].shadowRoot', game_rows[guess_num])
-            tiles = row.find_elements(By.CSS_SELECTOR, "game-tile")
+            tiles = row.find_elements(By.CSS_SELECTOR, 'game-tile')
             evaluation_map = {
-                "correct": "2",
-                "present": "1",
-                "absent": "0"
+                'correct': '2',
+                'present': '1',
+                'absent': '0'
             }
             
             for tile in tiles:
-                pattern_str.append(evaluation_map[str(tile.get_attribute("evaluation"))])
+                pattern_str.append(evaluation_map[str(tile.get_attribute('evaluation'))])
         else:
             for tile in game_rows[guess_num]:
-                if 'nm-inset-n-green' in tile.get_attribute("class"):
-                    pattern_str.append("2")
-                elif 'nm-inset-yellow-500' in tile.get_attribute("class"):
-                    pattern_str.append("1")
-                elif 'nm-inset-n-gray' in tile.get_attribute("class"):
-                    pattern_str.append("0")
+                if 'nm-inset-n-green' in tile.get_attribute('class'):
+                    pattern_str.append('2')
+                elif 'nm-inset-yellow-500' in tile.get_attribute('class'):
+                    pattern_str.append('1')
+                elif 'nm-inset-n-gray' in tile.get_attribute('class'):
+                    pattern_str.append('0')
 
-        pattern = int("".join(pattern_str[::-1]), 3)
+        pattern = int(''.join(pattern_str[::-1]), 3)
 
         if pattern == 3**5 - 1:
             return [guess]
@@ -85,14 +85,14 @@ def play_game_automated(words, game_rows, driver=None, is_classic_wordle=False):
 
     return words        
 
-def start_game_automated(is_classic_wordle=False, num_rounds=100):
+def start_game_automated(is_classic_wordle=False, method='max_entropy', num_rounds=100):
     """
     Opens browser with website based on classic or not. Then 
     starts playing wordle automatically.
     """
 
     chrome_options = Options()
-    chrome_options.add_experimental_option("detach", True)
+    chrome_options.add_experimental_option('detach', True)
     driver = webdriver.Chrome(service=Service(CHROME_DRIVER_FILE), options=chrome_options)    
 
     words = get_usable_words(is_classic_wordle=is_classic_wordle)
@@ -118,22 +118,26 @@ def start_game_automated(is_classic_wordle=False, num_rounds=100):
             
             time.sleep(2)
             keyboard.press_and_release('esc')
-            driver.find_element(By.XPATH, '//button[text()="Play Again"]').click()
+            driver.find_element(By.XPATH, "//button[text()='Play Again']").click()
             time.sleep(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', type=bool, default=False, help="Run in manual mode. Default is automatic.")
-    parser.add_argument('-c', type=bool, default=False, help="Play wordle classic. Default is WordMaster.")
-    parser.add_argument('-r', type=int, default=100, help="Number of rounds to play, if not classic mode. Default is 100.")
+    parser.add_argument('--manual', action='store_true', help='Run in manual mode. Default is automatic.')
+    parser.add_argument('--classic', action='store_true', help='Play wordle classic. Default is WordMaster.')
+    parser.add_argument('--rounds', type=int, default=100, help='Number of rounds to play, if not classic mode. Default is 100.')
+    parser.add_argument('--method', type=str, default='max_entropy', choices=['max_entropy', 'max_two_step_entropy'], 
+        help='The heuristic used to make a guess. Default is chosing the word with the max expected entropy')
+        
     args = parser.parse_args()
 
-    manual = args.m
-    classic = args.c
-    rounds = args.r
+    manual = args.manual
+    classic = args.classic
+    rounds = args.rounds
+    method = args.method
 
     if manual:
-        start_game_manual(is_classic_wordle=classic)
+        start_game_manual(is_classic_wordle=classic, method=method)
     else:
-        start_game_automated(is_classic_wordle=classic, num_rounds=rounds)
+        start_game_automated(is_classic_wordle=classic, method=method, num_rounds=rounds)
